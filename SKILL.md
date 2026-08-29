@@ -7,9 +7,6 @@ description: 把任意视频（本地文件/视频号 sph 链接/普通视频链
 
 核心原则：**转录必有错，无证据不改字**。Whisper 对中文口播的同音字误写（民江→岷江、禮兵→李冰）靠音频永远验不出来，视频里的板书/字幕才是物证。本管线的每一处改动都必须能追溯到一张具体的帧。
 
-> `$SKILL_DIR` = 本 skill 的安装目录（下文所有脚本路径相对它）。
-> 典型位置：`~/.agents/skills/video-distill/`（Claude Code / ZCode 等 agent 自动发现）。
-
 ## 路由：先判断从哪一步进
 
 | 用户手里有什么 | 从哪开始 |
@@ -23,12 +20,16 @@ description: 把任意视频（本地文件/视频号 sph 链接/普通视频链
 ## ①② 提取层：跑脚本，不要手写 ffmpeg
 
 ```bash
-bash "$SKILL_DIR/scripts/extract.sh" <video> <out_dir>
+bash scripts/extract.sh <video> <out_dir>        # 路径相对本 skill 目录
 # 可调参数（环境变量，都有默认值）:
 #   WHISPER_MODEL=medium   转录模型（默认 small，16GB 内存机器 small 稳）
+#   WHISPER_LANG=auto      转录语言（默认 auto 自动检测；zh/en 可显式指定——
+#                          英文视频强制 zh 会产生"繁體中文幻觉"，勿重蹈）
 #   TICK_SEC=8             固定抽帧间隔秒数（默认 12）
 #   SCENE_THR=0.3          场景切换阈值（默认 0.3）
 ```
+
+**无音轨防御**（X/GIF 场景常见无声 loop 动图）：extract.sh 先 ffprobe 检测音轨，无音轨自动跳过 whisper 只抽帧，不算失败（raw.txt 留空 + 提示"信息在帧不在语音"）。
 
 产物树（`<out_dir>/` 下）：
 
@@ -54,50 +55,38 @@ bash "$SKILL_DIR/scripts/extract.sh" <video> <out_dir>
 
 ## ⑤ 收尾自检（prove-it-works）——宣告完成前必须逐条过，任何一条不过 = 没完成
 
-> **执行方式**：跑 `bash "$SKILL_DIR/scripts/verify-output.sh" <out_dir>`（一条命令跑完所有硬检查，exit 0 = 通过）。
-> 脚本覆盖下述全部检查项；脚本报 FAIL 时逐项修复后重跑，**不许带着 FAIL 宣告完成**。
-> 手动核对项（脚本无法自动化的两条）也必须做：
-> 1. **抽查 1 处纠错**：Read changes.log 里某条改动对应的那帧 jpg → 图里真有改后的字？（防"agent 幻觉看过帧"）
-> 2. **引文核对**：DIGEST.md 里的引文逐条 grep verified.txt（防 raw.txt 错字渗进引文——实测发生过：都江宴/禮賓/明江）
+> **执行方式**:跑 `bash scripts/verify-output.sh <out_dir>`(一条命令跑完所有硬检查,exit 0 = 通过)。
+> 脚本覆盖下述全部检查项;脚本报 FAIL 时逐项修复后重跑,**不许带着 FAIL 宣告完成**。
+> 手动核对项(脚本无法自动化的两条)也必须做:
+> 1. **抽查 1 处纠错**:Read changes.log 里某条改动对应的那帧 jpg → 图里真有改后的字?(防"agent 幻觉看过帧")
+> 2. **引文核对**:DIGEST.md 里的引文逐条 grep verified.txt(防 raw.txt 错字渗进引文——实测发生过:都江宴/禮賓/明江)
 
 原则：**验证对着真东西（磁盘上的文件、能 Read 出字的帧），不许拿替身（self-report、exit code、"应该已生成"）当证据。**
 
 > 灵感来源：pstack [`principle-prove-it-works`](https://github.com/cursor/plugins/tree/main/pstack) —— "Verify against the real artifact, not a proxy, self-report, or 'it compiles'."
-> 本管线的本土化案例：一次批量处理中，任务 exit 0 + 自报完成，但推理根本没落盘（bridge 超时杀进程）。
+> 本管线的本土化案例：2026-08-23 sph 批处理，dsh exit 0 + 自报完成，但推理根本没落盘（bridge 超时杀进程）。
 > 教训：**磁盘是真值，其余都是传闻。**
 
 ### 脚本覆盖的检查项(verify-output.sh 自动跑)
 
 | 层 | 检查 | 抓什么坑 |
 |---|---|---|
-| ①② 提取 | frames 非空 / raw.txt+raw.srt 存在非空 / 可读 / 体量随时长自适应 | "extract.sh 说跑完了"但产物没落盘 |
+| ①② 提取 | frames 非空 / raw.txt+raw.srt 存在非空 / 可读 / >1000 字节 | "extract.sh 说跑完了"但产物没落盘 |
 | ③ 纠错 | verified.txt+changes.log 存在 / 改动行全带证据标注 / 四行统计齐全 / **体量合理(whisper 路线≥60%,字幕路线≥25%)** | verified 缺失、changes.log 缺证据、纠错时误删大段内容 |
 | ④ 蒸馏 | DIGEST 非空 + 含来源标注(有才查) | 蒸馏产物空壳 |
 
-**已知边界**：体量阈值报警 ≠ 内容真丢——字幕路线的 verified 会按意段重组(实测 38% 正常)。脚本报 FAIL 时先做关键词抽查(抽 raw 里 10 个关键术语 grep verified),全覆盖则是阈值误判,缺了才是真丢。
-
-### 触发链（自检已焊进管线，不靠自觉）
-
-- `extract.sh` 末尾自动跑 `verify-output.sh --stage extract`（只查提取层），FAIL 则 exit 1 不放行进 ③
-- 纠错层（含 subagent 路线）：subagent 收尾自跑自检；**主 agent 必须亲自重跑完整模式**——subagent 自报"通过"不算（self-report 不是证据）
-- 蒸馏收尾全量再跑一次，作为最后一道闸
+**已知边界**:体量阈值报警 ≠ 内容真丢——字幕路线的 verified 会按意段重组(实测 38% 正常)。脚本报 FAIL 时先做关键词抽查(抽 raw 里 10 个关键术语 grep verified),全覆盖则是阈值误判,缺了才是真丢。
 
 ## 质量红线
 
-- 拒绝"文案级元数据"（标题+简介+话题标签那种）——最低交付物 = verified.txt，不是视频描述
+- 用户已明确拒绝"文案级元数据"（标题+简介+话题标签那种）——最低交付物 = verified.txt，不是视频描述
 - 疑似错误无帧证据 → 保留原文 + 标 `[UNVERIFIED: 疑似应为XX]`，不许"顺手改对"
 - 蒸馏中的引文一律取自 verified.txt
-- 处理需要登录态/浏览器的下载时，用完必须关闭 tab 连接（平台风控，见 download.md）
+- 处理 sph 链接用完浏览器必须关闭 tab 连接（风控，见 download.md）
 
-## 本机负载纪律（低内存机器适用）
+## 本机负载纪律（16GB 内存是瓶颈）
 
 - whisper 一律**串行**跑，绝不并行；整链 `nice -n 15` 降权，别抢 UI 的 CPU
-- 与浏览器自动化**错峰**：等浏览器任务完全收尾、tab 连接关闭后再启动 whisper
-- 批量处理每条之间歇 15s；每条启动前查内存水线，可用内存 < 2.5G 就先等
-- LLM 调用走远程 API，本地几乎零负载，可放心用它们分担本地压力
-
-## 依赖
-
-- `ffmpeg`（抽帧）、`yt-dlp`（下载）、Python 3
-- [whisper.cpp](https://github.com/ggml-whisper/whisper.cpp) 的 `whisper` CLI（或任何 `--model/--output_format` 兼容的 CLI）
-- 可选：多模态图像理解（读帧证据用，没有则人工看帧）
+- 与浏览器自动化**错峰**：等浏览器自动化任务完全收尾、tab 连接关闭后再启动 whisper
+- 批量处理每条之间歇 15s；每条启动前查内存水线，可用（free+speculative+inactive）< 2.5G 就先等
+- LLM 调用（dsh / analyze_image / subagent）走远程 API，本地几乎零负载，可放心用它们分担本地压力
