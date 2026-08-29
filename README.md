@@ -1,5 +1,7 @@
 # video-distill
 
+<p align="center"><img src="docs/pipeline.svg" alt="video-distill pipeline" width="880"></p>
+
 **Turn any video into trustworthy, citable knowledge — with frame-level evidence for every correction.**
 
 A [skill](https://github.com/anthropics/skills) for AI coding agents (Claude Code, ZCode, and anything that reads `SKILL.md`): dual-track frame extraction → transcription → **frame-evidence correction** → distillation. Every text change is traceable to a specific video frame; every deliverable passes an executable self-check before it can be called "done".
