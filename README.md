@@ -83,6 +83,16 @@ Tell your agent: *"处理这个视频 https://… / distill this video"* — the
 - **Route-aware thresholds**: subtitle-route raw transcripts are line-stacked (redundant) while Whisper-route ones are dense — size checks adapt accordingly.
 - **Keep the unfixed visible**: uncorrectable suspicious words stay tagged `[UNVERIFIED: 疑似应为XX]` rather than being "helpfully" fixed.
 
+## Credits & Prior Art
+
+- **[pstack](https://github.com/cursor/plugins/tree/main/pstack)** (Lauren Tan, Cursor) — the `principle-prove-it-works` principle directly inspired this pipeline's executable self-check layer ("verify against the real artifact, not a proxy or self-report"), and its playbook/routing pattern informed the SKILL.md stage design.
+- **[cangjie-skill](https://github.com/kangarooking/cangjie-skill)** (仓颉) — optional heavy-distillation path (7-stage); this repo's built-in RIA-lite is the fallback.
+- **[whisper.cpp](https://github.com/ggml-whisper/whisper.cpp)** — transcription backend.
+- **[yt-dlp](https://github.com/yt-dlp/yt-dlp)** / **[ffmpeg](https://ffmpeg.org)** — download & dual-track frame extraction.
+- The frame-evidence correction methodology (每处改动引用具体帧) was developed during a real batch-transcription incident where silent homophone errors leaked into published digests; the protocol is documented in `references/verify-protocol.md`.
+
+If this repo helped you, a star is appreciated — and PRs welcome, especially platform-specific download recipes.
+
 ## License
 
 MIT
