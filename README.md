@@ -1,35 +1,31 @@
 # video-distill
 
+[**简体中文**](README.md) | [English](README_EN.md)
+
 <p align="center"><img src="docs/pipeline.svg" alt="video-distill pipeline" width="880"></p>
 
-**Turn any video into trustworthy, citable knowledge — with frame-level evidence for every correction.**
+> 把任意视频变成**可信、可引用**的知识——每一处文字修正都有具体帧作证，每一次"完成"都要过可执行自检。
 
-A [skill](https://github.com/anthropics/skills) for AI coding agents (Claude Code, ZCode, and anything that reads `SKILL.md`): dual-track frame extraction → transcription → **frame-evidence correction** → distillation. Every text change is traceable to a specific video frame; every deliverable passes an executable self-check before it can be called "done".
+一个面向 AI 编程智能体（Claude Code / ZCode 等一切读取 `SKILL.md` 的 agent）的[技能](https://github.com/anthropics/skills)：双路抽帧 → 转录 → **帧证据纠错** → 蒸馏 → 可执行收尾自检。
 
-> 核心理念：**转录必有错，无证据不改字。** Speech-to-text errors (homophones, mangled proper nouns) can never be verified by re-listening — the video's own frames (slides, subtitles, on-screen text) are the only physical evidence. This pipeline makes every correction auditable and every completion claim verifiable.
-
-English docs · 中文说明见下方
+核心理念：**转录必有错，无证据不改字。** 语音转文字的同音字误写、专有名词错拼，靠重听永远验不出来——视频画面里的板书、字幕、术语写法才是唯一的物证。
 
 ---
 
-## Why this exists
+## 为什么需要它
 
-Typical "video → notes" pipelines produce plausible text with silent errors baked in. Worse, the agent *claims* completion based on its own self-report — and nobody checks the artifacts on disk.
+常见的"视频转文字"管线产出的文本，错误是静默的——更糟的是，agent 基于"自我汇报"就宣称完成，没人检查磁盘上的真产物。video-distill 用两层纪律对治：
 
-video-distill enforces two discipline layers:
+1. **帧证据纠错** —— 每处文字改动必须引用具体帧（`原文 → 改后 | 证据=scene113.jpg`）；无证据的疑似错误标 `[UNVERIFIED]` 保留，绝不"顺手改对"。
+2. **可执行自检（prove-it-works）** —— `verify-output.sh` 对着磁盘真产物跑 12 项硬检查，exit 0 才算完成。这条纪律源自真实事故：批量任务自报成功，产物根本没落盘。
 
-1. **Evidence-based correction** — a transcription change is only allowed with a frame reference (`原文 → 改后 | 证据=scene113.jpg`). Unverifiable guesses stay in the text tagged `[UNVERIFIED]`.
-2. **Executable self-check** — `verify-output.sh` verifies real artifacts on disk (not "the agent said it finished"). Exit 0 or it's not done. This was born from a real incident: a batch job reported success, but the output was never written to disk.
+## 适用场景
 
----
-
-## Use cases / 适用场景
-
-凡是"视频里的内容,之后要被**引用、汇总、拿来做决定**"的场景——都适用。
+凡是"视频里的内容，之后要被**引用、汇总、拿来做决定**"的场景——都适用。
 
 | 场景 | 为什么需要帧证据 |
 |---|---|
-| **讲座 / 播客 → 笔记** | 口播术语被转错(如 "Harnes"→"Harness")，帧里的 slide 写法才是标准写法 |
+| **讲座 / 播客 → 笔记** | 口播术语被转错，帧里 slide 的写法才是标准写法 |
 | **教程视频 → 操作手册** | 命令行参数、文件名（`SOUL.md` vs `sore.md`）只有画面能锁定，听永远分不清 |
 | **会议录像 → 决议纪要** | "预算 300 万"错成 30 万是要出事的——板书 / PPT 是物证 |
 | **批量视频处理** | 逐条人工校对不现实；可审计的自动化 = 每处改动有帧作证，抽查即可放行 |
@@ -38,7 +34,7 @@ video-distill enforces two discipline layers:
 
 **不适用**：纯音乐 MV、画面无文字且术语密度低的闲聊视频（帧证据没东西可锚）、实时直播。
 
-## Requirements / 依赖工具
+## 依赖工具
 
 | 工具 | 用在哪 | 必需？ | 获取 |
 |---|---|---|---|
@@ -46,97 +42,80 @@ video-distill enforces two discipline layers:
 | **yt-dlp** | ⓪ 下载（YouTube / B站 / 抖音等）、探测字幕轨 | ✅ 必需 | `brew install yt-dlp` / [yt-dlp.org](https://github.com/yt-dlp/yt-dlp) |
 | **whisper.cpp** 的 `whisper` CLI | ② 转录（或任何兼容 `--model/--output_format` 的实现） | 转录必需（字幕预放路线可跳过） | [ggml-whisper/whisper.cpp](https://github.com/ggml-whisper/whisper.cpp) |
 | **Python 3** | extract.sh 内部（帧时间戳对齐） | ✅ 必需 | 系统自带或 [python.org](https://www.python.org) |
-| **多模态图像理解** | ③ 读帧证据（如 Claude / GPT-4V / Gemini 的视觉能力，或本地 VLM） | 纠错必需（无则人工看帧） | 随你的 agent |
-| **jq / gh CLI**（可选） | 本仓库贡献者跑 CI 与示例 | 可选 | `brew install gh` |
+| **多模态图像理解** | ③ 读帧证据（Claude / GPT-4V / Gemini 视觉，或本地 VLM） | 纠错必需（无则人工看帧） | 随你的 agent |
 
-> **16GB 内存机器**：whisper 用默认 `small` 模型即可，且务必串行跑、`nice -n 15` 降权（详见 SKILL.md 本机负载纪律）。
+> **16GB 内存机器**：whisper 用默认 `small` 模型即可，务必串行跑、`nice -n 15` 降权（详见 SKILL.md 本机负载纪律）。
 
-## What's inside
+## 目录结构
 
 ```
 video-distill/
-├── SKILL.md                      # Entry point: routing + pipeline rules (read this first)
+├── SKILL.md                      # 入口：路由 + 管线规则（先读这个）
 ├── scripts/
-│   ├── extract.sh                # ①② ffmpeg dual-track frames + Whisper transcription
-│   └── verify-output.sh          # ⑤ Executable self-check (12 checks, exit 0 = done)
+│   ├── extract.sh                # ①② ffmpeg 双路抽帧 + Whisper 转录
+│   └── verify-output.sh          # ⑤ 可执行收尾自检（12 项检查，exit 0 = 完成）
 └── references/
-    ├── verify-protocol.md        # ③ Frame-evidence correction protocol + subagent template
-    ├── distill.md                # ④ Distillation rules (input MUST be verified.txt)
-    └── download.md               # ⓪ Download strategies + copyright boundary
+    ├── verify-protocol.md        # ③ 帧证据纠错协议 + subagent 派发模板
+    ├── distill.md                # ④ 蒸馏规则（输入必须是 verified.txt）
+    └── download.md               # ⓪ 下载策略 + 版权边界
 ```
 
-## Pipeline
+## 管线
 
 ```
-⓪ Download          yt-dlp (YouTube/Bilibili/…) — prefer official subtitle tracks as ground truth
-①② Extract          extract.sh → frames/tick*.jpg + frames/scene*.jpg + transcript/raw.{txt,srt}
-③ Correct           read frames as evidence → verified.txt + changes.log (every change cites a frame)
-④ Distill           verified.txt (NEVER raw.txt) → DIGEST.md
-⑤ Self-check        verify-output.sh → exit 0, or it's not done
+⓪ 下载          yt-dlp（YouTube/B站/抖音…）——优先拿官方字幕轨当地面真值
+①② 提取         extract.sh → frames/tick*.jpg + frames/scene*.jpg + transcript/raw.{txt,srt}
+③ 纠错          读帧作证据 → verified.txt + changes.log（每处改动引用一帧）
+④ 蒸馏          只吃 verified.txt（绝不吃 raw.txt）→ DIGEST.md
+⑤ 自检          verify-output.sh → exit 0，否则不算完成
 ```
 
-**Why dual-track frame extraction:** speech-heavy videos rarely trigger scene changes (observed: 2 scene cuts in a 4-min talk), so scene detection alone gives too little evidence. Fixed-interval ticks guarantee coverage; scene frames add density where it matters. Filenames embed the second offset, aligning directly with the SRT timeline.
+**为什么双路抽帧**：口播类视频极少触发场景切换（实测 4 分钟仅 2 次），单靠场景检测证据不够；固定间隔保证覆盖，场景帧补密度。文件名内嵌秒数，可直接对齐 SRT 时间轴。
 
-## Install
-
-**Requirements:** `ffmpeg`, `yt-dlp`, Python 3, and [whisper.cpp](https://github.com/ggml-whisper/whisper.cpp)'s `whisper` CLI (or any compatible CLI with `--model/--output_format` flags). macOS/Linux. 16GB RAM machines: use the default `small` model and keep transcriptions serial.
+## 安装
 
 ```bash
-git clone https://github.com/<you>/video-distill ~/.agents/skills/video-distill
+git clone https://github.com/mayuegood/video-distill ~/.agents/skills/video-distill
 ```
 
-That's it — agents discover the skill via `SKILL.md`. To verify an existing run:
+完成——agent 通过 `SKILL.md` 自动发现该技能。验证一次已有产物：
 
 ```bash
-bash ~/.agents/skills/video-distill/scripts/verify-output.sh <output_dir>
+bash ~/.agents/skills/video-distill/scripts/verify-output.sh <输出目录>
 ```
 
-## The self-check (prove-it-works)
+## 自检层（prove-it-works）
 
-`verify-output.sh` runs 12 hard checks across three layers and is wired into the pipeline itself — extraction auto-runs it (stage mode), the correction protocol requires the parent agent to re-run it in full mode (a subagent's self-report doesn't count), and distillation ends with a full re-run as the final gate.
+`verify-output.sh` 跨三层跑 12 项硬检查，且已焊进管线自身——提取层自动触发（stage 模式），纠错协议要求主 agent 亲自重跑完整模式（subagent 的自我汇报不算数），蒸馏收尾全量再跑一次作为最后一道闸。
 
-| Layer | Checks | Catches |
+| 层 | 检查 | 抓什么坑 |
 |---|---|---|
-| Extract | frames exist / raw.txt+srt non-empty / readable / size scales with video length | "extract said it finished" but nothing landed on disk |
-| Correct | verified.txt+changes.log exist / every change cites evidence / stats block / size ratio (route-aware) | missing evidence, silent mass deletion |
-| Distill | DIGEST non-empty + source attribution | hollow deliverables |
+| 提取 | frames 存在 / raw.txt+srt 非空 / 可读 / 体量随时长自适应 | "extract 说跑完了"但产物没落盘 |
+| 纠错 | verified.txt+changes.log 存在 / 每处改动带证据标注 / 统计块 / 体量比（按路线自适应） | 缺证据、静默大段删改 |
+| 蒸馏 | DIGEST 非空 + 来源标注 | 空壳交付物 |
 
-Known boundary: the size-ratio check flags, it doesn't convict — subtitle-route transcripts get restructured (observed 38% is normal), so a FAIL there means "run the keyword spot-check", not "content is lost".
+已知边界：体量比检查只报警不定罪——字幕路线的转录会按意段重组（实测 38% 属正常），FAIL 意味着"跑关键词抽查"，不是"内容丢了"。
 
-## Usage sketch
+## 使用方式
 
-Tell your agent: *"处理这个视频 https://… / distill this video"* — the SKILL.md routing table picks the entry point (local file / WeChat-Channel link / normal URL / existing transcript / existing verified.txt). Or run layers manually — every script is standalone.
+对 agent 说：**"处理这个视频 https://… "**——SKILL.md 的路由表自动选入口（本地文件 / 视频号链接 / 普通链接 / 已有转录 / 已有 verified.txt）。也可手动分层运行——每个脚本都可独立执行。
 
-## Design notes
+## 设计决策
 
-- **Correct, not rewrite**: the correction layer never touches word order, deletes sentences, or "improves" phrasing. 校对不是改写。
-- **Route-aware thresholds**: subtitle-route raw transcripts are line-stacked (redundant) while Whisper-route ones are dense — size checks adapt accordingly.
-- **Keep the unfixed visible**: uncorrectable suspicious words stay tagged `[UNVERIFIED: 疑似应为XX]` rather than being "helpfully" fixed.
+- **校对不是改写**：纠错层绝不改语序、不删句、不润色。
+- **阈值按路线自适应**：字幕路线的 raw 是逐行堆叠（冗余大），whisper 路线是密文本——体量检查相应区分。
+- **保留未修正的可见性**：无法验证的存疑词标 `[UNVERIFIED: 疑似应为XX]` 留在原文里，而不是"好心"改掉。
 
-## Credits & Prior Art
+## 致谢与先例
 
-- **[pstack](https://github.com/cursor/plugins/tree/main/pstack)** (Lauren Tan, Cursor) — the `principle-prove-it-works` principle directly inspired this pipeline's executable self-check layer ("verify against the real artifact, not a proxy or self-report"), and its playbook/routing pattern informed the SKILL.md stage design.
-- **[cangjie-skill](https://github.com/kangarooking/cangjie-skill)** (仓颉) — optional heavy-distillation path (7-stage); this repo's built-in RIA-lite is the fallback.
-- **[whisper.cpp](https://github.com/ggml-whisper/whisper.cpp)** — transcription backend.
-- **[yt-dlp](https://github.com/yt-dlp/yt-dlp)** / **[ffmpeg](https://ffmpeg.org)** — download & dual-track frame extraction.
-- The frame-evidence correction methodology (每处改动引用具体帧) was developed during a real batch-transcription incident where silent homophone errors leaked into published digests; the protocol is documented in `references/verify-protocol.md`.
+- **[pstack](https://github.com/cursor/plugins/tree/main/pstack)**（Lauren Tan, Cursor）—— `principle-prove-it-works` 原则直接启发了本管线的可执行自检层（"对着真产物验证，而不是代理物、自我汇报或'能编译'"），其 playbook/路由模式也影响了 SKILL.md 的分层设计。
+- **[cangjie-skill](https://github.com/kangarooking/cangjie-skill)**（仓颉）—— 可选的重蒸馏路径（七阶段）；本仓库内置的 RIA-lite 是 fallback。
+- **[whisper.cpp](https://github.com/ggml-whisper/whisper.cpp)** —— 转录后端。
+- **[yt-dlp](https://github.com/yt-dlp/yt-dlp)** / **[ffmpeg](https://ffmpeg.org)** —— 下载与双路抽帧。
+- 帧证据纠错方法论（每处改动引用具体帧）源自一次真实的批量转录事故：静默同音字错误渗进了发布版摘要；协议文档见 `references/verify-protocol.md`。
 
-If this repo helped you, a star is appreciated — and PRs welcome, especially platform-specific download recipes.
+如果这个仓库对你有帮助，欢迎点个 star —— 也欢迎 PR，尤其是各平台专属的下载配方。
 
 ## License
 
 MIT
-
----
-
-## 中文速览
-
-把任意视频（本地文件 / 视频号 / YouTube / B站）加工成**可信、可审计**的知识：
-
-1. **双路抽帧** — 固定间隔帧保证覆盖 + 场景切换帧补密度，文件名内嵌秒数对齐字幕时间轴
-2. **转录** — Whisper（默认 small，16GB 机器稳）；有官方字幕轨时优先拿字幕当地面真值
-3. **帧证据纠错** — 每处改动必须引用具体帧（`原文 → 改后 | 证据=帧文件名`）；无证据的疑似错误标 `[UNVERIFIED]` 保留，不许"顺手改对"；产出 `verified.txt + changes.log`
-4. **蒸馏** — 只吃 verified.txt（raw.txt 的错字会渗进引文——实测发生过）
-5. **可执行收尾自检** — `verify-output.sh` 对着磁盘真产物验证 12 项，exit 0 才算完成；源自真实事故（任务自报成功但产物根本没落盘）
-
-安装：`git clone` 到 `~/.agents/skills/video-distill`（或你的 agent 对应的 skills 目录）即可被自动发现。
