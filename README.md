@@ -23,6 +23,34 @@ video-distill enforces two discipline layers:
 
 ---
 
+## Use cases / 适用场景
+
+凡是"视频里的内容,之后要被**引用、汇总、拿来做决定**"的场景——都适用。
+
+| 场景 | 为什么需要帧证据 |
+|---|---|
+| **讲座 / 播客 → 笔记** | 口播术语被转错(如 "Harnes"→"Harness")，帧里的 slide 写法才是标准写法 |
+| **教程视频 → 操作手册** | 命令行参数、文件名（`SOUL.md` vs `sore.md`）只有画面能锁定，听永远分不清 |
+| **会议录像 → 决议纪要** | "预算 300 万"错成 30 万是要出事的——板书 / PPT 是物证 |
+| **批量视频处理** | 逐条人工校对不现实；可审计的自动化 = 每处改动有帧作证，抽查即可放行 |
+| **采访 / 对谈 → 引文引用** | 引文可信度靠 changes.log 背书，敢直接引用 |
+| **多语言视频（繁转简）** | Whisper 中文输出常带繁体 + 同音字，逐句转换最容易顺手改错 |
+
+**不适用**：纯音乐 MV、画面无文字且术语密度低的闲聊视频（帧证据没东西可锚）、实时直播。
+
+## Requirements / 依赖工具
+
+| 工具 | 用在哪 | 必需？ | 获取 |
+|---|---|---|---|
+| **ffmpeg** | 双路抽帧（固定间隔 + 场景切换）、音频提取 | ✅ 必需 | `brew install ffmpeg` / [ffmpeg.org](https://ffmpeg.org) |
+| **yt-dlp** | ⓪ 下载（YouTube / B站 / 抖音等）、探测字幕轨 | ✅ 必需 | `brew install yt-dlp` / [yt-dlp.org](https://github.com/yt-dlp/yt-dlp) |
+| **whisper.cpp** 的 `whisper` CLI | ② 转录（或任何兼容 `--model/--output_format` 的实现） | 转录必需（字幕预放路线可跳过） | [ggml-whisper/whisper.cpp](https://github.com/ggml-whisper/whisper.cpp) |
+| **Python 3** | extract.sh 内部（帧时间戳对齐） | ✅ 必需 | 系统自带或 [python.org](https://www.python.org) |
+| **多模态图像理解** | ③ 读帧证据（如 Claude / GPT-4V / Gemini 的视觉能力，或本地 VLM） | 纠错必需（无则人工看帧） | 随你的 agent |
+| **jq / gh CLI**（可选） | 本仓库贡献者跑 CI 与示例 | 可选 | `brew install gh` |
+
+> **16GB 内存机器**：whisper 用默认 `small` 模型即可，且务必串行跑、`nice -n 15` 降权（详见 SKILL.md 本机负载纪律）。
+
 ## What's inside
 
 ```
