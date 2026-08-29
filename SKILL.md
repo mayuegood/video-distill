@@ -62,7 +62,7 @@ bash "$SKILL_DIR/scripts/extract.sh" <video> <out_dir>
 
 原则：**验证对着真东西（磁盘上的文件、能 Read 出字的帧），不许拿替身（self-report、exit code、"应该已生成"）当证据。**
 
-> 灵感来源：pstack `principle-prove-it-works` —— "Verify against the real artifact, not a proxy, self-report, or 'it compiles'."
+> 灵感来源：pstack [`principle-prove-it-works`](https://github.com/cursor/plugins/tree/main/pstack) —— "Verify against the real artifact, not a proxy, self-report, or 'it compiles'."
 > 本管线的本土化案例：一次批量处理中，任务 exit 0 + 自报完成，但推理根本没落盘（bridge 超时杀进程）。
 > 教训：**磁盘是真值，其余都是传闻。**
 
